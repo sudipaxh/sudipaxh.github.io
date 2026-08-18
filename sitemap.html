@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Sitemap</title>
+    <style>
+        /* Basic, clean styling suitable for Blogger */
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            margin: 20px;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .sitemap-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .sitemap-table th, .sitemap-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        .sitemap-table th {
+            background-color: #f4f4f4;
+            font-weight: bold;
+        }
+        .sitemap-table a {
+            color: #1a0dab; /* Standard Google link blue */
+            text-decoration: none;
+        }
+        .sitemap-table a:hover {
+            text-decoration: underline;
+        }
+        #loading {
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Website Sitemap</h1>
+    <p>Complete list of video pages for easy navigation and search engine crawling.</p>
+
+    <div id="loading">Loading links, please wait...</div>
+
+    <table class="sitemap-table" id="sitemapTable" style="display: none;">
+        <thead>
+            <tr>
+                <th style="width: 50px;">#</th>
+                <th>Video Title & Link</th>
+            </tr>
+        </thead>
+        <tbody id="sitemapBody">
+            <!-- Data will be loaded here by JavaScript -->
+        </tbody>
+    </table>
+
+    <script>
+        // Data source URL
+        const JSON_URL = 'https://raw.githubusercontent.com/st3084907-jpg/sdata/refs/heads/main/source.json';
+        const BASE_URL = 'https://xhamster52.blogspot.com/2026/08/play.html';
+
+        // Fetch data and build the table
+        fetch(JSON_URL)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const videos = data.data || [];
+                const tableBody = document.getElementById('sitemapBody');
+                let htmlContent = '';
+                let count = 1;
+
+                videos.forEach(video => {
+                    if (video && video.title) {
+                        // 1. Clean the title
+                        const cleanTitle = video.title.trim();
+                        
+                        // 2. Encode title for the URL parameter safely
+                        const encodedTitle = encodeURIComponent(cleanTitle);
+                        
+                        // 3. Create the full URL
+                        const fullUrl = `${BASE_URL}?title=${encodedTitle}`;
+                        
+                        // 4. Create standard HTML anchor tags for Googlebot to crawl
+                        // Googlebot perfectly understands <a href="..."> tags
+                        htmlContent += `
+                            <tr>
+                                <td>${count}</td>
+                                <td>
+                                    <a href="${fullUrl}" target="_blank" rel="noopener noreferrer">
+                                        ${cleanTitle}
+                                    </a>
+                                </td>
+                            </tr>
+                        `;
+                        count++;
+                    }
+                });
+
+                // Inject into the table
+                tableBody.innerHTML = htmlContent;
+                
+                // Hide loading, show table
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('sitemapTable').style.display = 'table';
+            })
+            .catch(error => {
+                console.error('Error fetching sitemap data:', error);
+                document.getElementById('loading').innerText = 'Failed to load sitemap data.';
+            });
+    </script>
+
+</body>
+</html>

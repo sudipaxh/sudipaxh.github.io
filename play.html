@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VidStream Player</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts and Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="canonical">
+    <!-- HLS.js for playing m3u8 streams -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+
+
+
+     <script src="https://pl30890291.effectivecpmnetwork.com/67/6e/ce/676ece24e6a6e70296b1f50002656b06.js"></script>
+
+
+    <script src="https://pl30890292.effectivecpmnetwork.com/cc/2f/c1/cc2fc14af5f11584364ef699b0947172.js"></script>
+
+    
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #0b0f19;
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Video Card Animations (for related videos) */
+        .video-card {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .video-card:hover {
+            transform: translateY(-4px) scale(1.02);
+            z-index: 10;
+        }
+
+        .play-button-overlay {
+            opacity: 0;
+            transition: all 0.3s ease;
+            transform: scale(0.8);
+        }
+        
+        .video-card:hover .play-button-overlay {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Player Glow Effect */
+        .player-container {
+            position: relative;
+        }
+        .player-container::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            background: linear-gradient(45deg, #ec4899, #8b5cf6, #3b82f6, #ec4899);
+            z-index: -1;
+            border-radius: 0.85rem;
+            background-size: 400%;
+            animation: glowing 20s linear infinite;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .player-container.is-playing::before {
+            opacity: 0.7;
+        }
+
+        @keyframes glowing {
+            0% { background-position: 0 0; }
+            50% { background-position: 400% 0; }
+            100% { background-position: 0 0; }
+        }
+
+        /* Quality / Settings Menu */
+        #quality-toggle {
+            transition: all 0.2s ease;
+        }
+        #quality-toggle:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        #quality-menu {
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            transform-origin: top right;
+        }
+        #quality-menu.hidden-menu {
+            opacity: 0;
+            transform: scale(0.95) translateY(-4px);
+            pointer-events: none;
+        }
+        .quality-option {
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .quality-option.active-quality {
+            color: #ec4899;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <!-- Floating Navbar -->
+    <nav class="fixed top-4 left-4 right-4 z-50 bg-[#131b2f]/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-lg shadow-black/50">
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo & Back -->
+                <div class="flex items-center gap-6">
+                    <button onclick="window.location.href='/'" class="text-slate-400 hover:text-white flex items-center gap-2 p-2 rounded-lg hover:bg-white/5 transition-colors group">
+                        <i class="fa-solid fa-arrow-left transform group-hover:-translate-x-1 transition-transform"></i>
+                        <span class="hidden sm:inline">Back</span>
+                    </button>
+                    
+                    <div class="w-px h-6 bg-white/20"></div>
+
+                    <div class="flex-shrink-0 flex items-center gap-3 cursor-pointer group" onclick="window.location.href='/'">
+                        <div class="w-8 h-8 bg-gradient-to-br from-pink-500 via-purple-500 to-blue-500 rounded-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-300">
+                            <i class="fa-solid fa-play text-white text-[10px] ml-0.5"></i>
+                        </div>
+                        <span class="font-extrabold text-xl tracking-tight text-white hidden sm:block">VidStream</span>
+                    </div>
+                </div>
+
+                <!-- Right Section -->
+                <div class="flex items-center gap-4">
+                    <div class="w-9 h-9 rounded-full overflow-hidden border-2 border-transparent hover:border-purple-500 cursor-pointer transition-colors">
+                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=475569" alt="User Avatar" class="w-full h-full object-cover">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content Area -->
+    <main class="max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12 flex-1 flex flex-col lg:flex-row gap-8">
+        
+        <!-- Left Column: Player & Details (Takes up more space) -->
+        <div class="flex-1 min-w-0 flex flex-col">
+            
+            <!-- Video Player Container -->
+            <div id="player-wrapper" class="player-container bg-black rounded-xl shadow-2xl relative w-full mb-6">
+                <div class="relative w-full pb-[56.25%] rounded-xl overflow-hidden z-10 bg-[#0b0f19]">
+                    <video id="main-player" class="absolute top-0 left-0 w-full h-full outline-none" controls autoplay playsinline></video>
+                    
+                    <!-- Loading Overlay (Initial state) -->
+                    <div id="player-loading" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 backdrop-blur-sm">
+                        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-purple-500 mb-4"></i>
+                        <p class="text-white font-medium">Connecting to stream...</p>
+                    </div>
+
+                    <!-- Quality / Settings Gear -->
+                    <div class="absolute top-3 right-3 z-30">
+                        <button id="quality-toggle" onclick="toggleQualityMenu(event)"
+                            class="w-9 h-9 rounded-full bg-black/60 border border-white/10 text-white flex items-center justify-center hover:text-purple-400"
+                            title="Video quality">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
+
+                        <div id="quality-menu" class="hidden-menu absolute right-0 mt-2 w-44 bg-[#131b2f]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                            <div class="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-white/10">Quality</div>
+                            <div id="quality-options" class="py-1 max-h-60 overflow-y-auto">
+                                <!-- Populated by JS -->
+                                <div class="px-4 py-2 text-sm text-slate-500">No alternate sources</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <script async="async" data-cfasync="false" src="https://pl30890293.effectivecpmnetwork.com/cbf1431ee2e0f79b39b621de28809be8/invoke.js"></script>
+<div id="container-cbf1431ee2e0f79b39b621de28809be8"></div>
+
+            <!-- Video Info -->
+            <div class="bg-[#131b2f]/80 backdrop-blur-md rounded-2xl p-6 border border-white/5 shadow-xl">
+                <h1 id="video-title" class="text-2xl md:text-3xl font-extrabold text-white mb-3 line-clamp-2">Loading Video Details...</h1>
+                
+                <div class="flex items-center gap-4 mb-6 text-sm text-slate-400 border-b border-white/10 pb-6">
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-eye text-purple-500"></i> <span id="view-count">---</span> views</span>
+                    <span>•</span>
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-calendar text-blue-500"></i> Just now</span>
+                    <span>•</span>
+                    <span class="bg-white/10 px-2 py-0.5 rounded text-white font-semibold text-xs border border-white/20">HD</span>
+                </div>
+                
+                <div style="display:none;" class="bg-black/30 rounded-xl p-4 border border-white/5">
+                    <h3 class="text-sm font-bold text-slate-300 mb-2 uppercase tracking-wider">Stream Information</h3>
+                    <p class="text-slate-400 text-sm mb-3">You are watching via high-performance HLS streaming protocol.</p>
+                    <div class="flex items-center bg-black/60 rounded-lg border border-white/10 overflow-hidden">
+                        <div style="display:none;" class="px-3 py-2 bg-white/5 border-r border-white/10 text-slate-400 text-xs font-mono">URL</div>
+                        <p id="video-url" class="px-3 py-2 text-slate-500 text-xs font-mono truncate flex-1">Fetching...</p>
+                        <button onclick="copyUrl()" class="px-3 py-2 text-slate-400 hover:text-white hover:bg-white/10 transition-colors" title="Copy Stream URL">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Related Videos List -->
+        <div class="w-full lg:w-[400px] xl:w-[450px] shrink-0">
+            <div class="bg-[#131b2f]/80 backdrop-blur-md rounded-2xl p-5 border border-white/5 shadow-xl h-full flex flex-col">
+                <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-list-ul text-pink-500"></i> Up Next
+                </h3>
+                
+                <div id="related-loading" class="flex-1 flex flex-col items-center justify-center text-slate-500 py-12">
+                    <i class="fa-solid fa-circle-notch fa-spin text-2xl mb-3"></i>
+                    <p class="text-sm">Finding related content...</p>
+                </div>
+
+                <!-- Scrollable List -->
+                <div id="related-videos-container" class="flex-1 overflow-y-auto pr-2 space-y-4 hidden" style="max-height: calc(100vh - 200px);">
+                    <!-- Related videos injected by JS -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-white/10 bg-[#0b0f19] relative overflow-hidden">
+        <div class="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full mix-blend-screen filter blur-[100px] pointer-events-none"></div>
+        <div class="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full mix-blend-screen filter blur-[100px] pointer-events-none"></div>
+
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-400">
+                <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='/'">
+                    <div class="w-6 h-6 bg-gradient-to-br from-pink-500 to-purple-600 rounded flex items-center justify-center">
+                        <i class="fa-solid fa-play text-white text-[8px] ml-0.5"></i>
+                    </div>
+                    <span class="font-bold text-lg text-white">VidStream</span>
+                </div>
+                
+                <p>&copy; 2026 VidStream Platform. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const DATA_URL = 'https://raw.githubusercontent.com/st3084907-jpg/sdata/refs/heads/main/source.json';
+        let currentStreamUrl = '';
+        let currentTitle = '';
+        let hlsInstance = null;
+        let allVideosData = [];
+        let currentVideoLinks = [];   // all m3u8 links available for the currently playing video
+        let currentLinkIndex = 0;     // which link in currentVideoLinks is active
+        let sourceSwitchAttempts = 0; // how many auto fallback switches we've tried for this video
+        let networkErrorCount = 0;
+        let mediaErrorCount = 0;
+        let stallTimer = null;        // detects "not actually playing" and triggers auto-switch
+        const STALL_TIMEOUT_MS = 9000;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. Get URL Parameters - only the title travels in the URL now.
+            //    The actual stream link(s) are always resolved from the JSON DB.
+            const urlParams = new URLSearchParams(window.location.search);
+            const title = urlParams.get('title');
+            currentTitle = title || '';
+
+            // 2. Setup Player Info
+            if (title) {
+                document.getElementById('video-title').textContent = title;
+                document.title = `${title} - VidStream`;
+            } else {
+                document.getElementById('video-title').textContent = 'Unknown Video';
+            }
+
+            // Random view count for visual flair - ranges anywhere from ~10K up to a few million,
+            // formatted as 100K / 500K / 1.2M etc. Only changes on a fresh page load/reload.
+            updateViewCount();
+
+            // 3. Load DB data once, resolve the stream URL(s) by matching title,
+            //    then start the player and populate quality options + related videos.
+            loadDatabase();
+
+            // 4. Close quality menu when clicking elsewhere
+            document.addEventListener('click', (e) => {
+                const menu = document.getElementById('quality-menu');
+                const toggle = document.getElementById('quality-toggle');
+                if (!menu.contains(e.target) && !toggle.contains(e.target)) {
+                    menu.classList.add('hidden-menu');
+                }
+            });
+        });
+
+        // Generates a random view count anywhere from ~10K to ~2.9M and formats it
+        // like real platforms do: 100K, 500K, 1M, 1.2M, 2.9M etc.
+        function updateViewCount() {
+            const useMillions = Math.random() < 0.35; // sometimes show millions, mostly K range
+            let display;
+
+            if (useMillions) {
+                const millions = (Math.random() * 2.9 + 1); // 1.0M - 3.9M
+                display = (Math.round(millions * 10) / 10) + 'M';
+                display = display.replace('.0M', 'M'); // clean whole numbers like "2M" instead of "2.0M"
+            } else {
+                const thousands = Math.floor(Math.random() * 990 + 10) * 1; // 10 - 999
+                const rounded = Math.round(thousands / 10) * 10; // round to nearest 10 for a natural look
+                display = rounded + 'K';
+            }
+
+            const el = document.getElementById('view-count');
+            if (el) el.textContent = display;
+        }
+
+        async function loadDatabase() {
+            try {
+                const response = await fetch(DATA_URL, { cache: 'force-cache' });
+                if (!response.ok) throw new Error('Network response was not ok');
+                const json = await response.json();
+
+                if (json.data && json.data.length > 0) {
+                    allVideosData = json.data;
+
+                    // Find the video matching the title from the URL, then auto-pick its first link to play.
+                    const matched = allVideosData.find(v => v.title && currentTitle &&
+                        v.title.trim().toLowerCase() === currentTitle.trim().toLowerCase());
+                    const links = (matched && Array.isArray(matched.m3u8_links)) ? matched.m3u8_links.filter(Boolean) : [];
+
+                    if (links.length > 0) {
+                        currentVideoLinks = links;
+                        currentLinkIndex = 0;
+                        currentStreamUrl = links[0];
+                        initPlayer(currentStreamUrl);
+                        setupQualityOptions(allVideosData);
+                    } else {
+                        const loadingOverlay = document.getElementById('player-loading');
+                        loadingOverlay.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-4xl text-yellow-500 mb-4"></i><p class="text-white">No matching video found in database.</p>';
+                        document.getElementById('video-url').textContent = 'N/A';
+                    }
+
+                    renderRelatedVideos(allVideosData);
+                } else {
+                    throw new Error('No data found');
+                }
+            } catch (error) {
+                console.error("Error loading database:", error);
+                document.getElementById('related-loading').innerHTML = '<p class="text-sm text-red-400">Failed to load suggestions.</p>';
+                const loadingOverlay = document.getElementById('player-loading');
+                loadingOverlay.innerHTML = '<i class="fa-solid fa-circle-xmark text-4xl text-red-500 mb-4"></i><p class="text-white">Failed to load stream database.</p>';
+            }
+        }
+
+        function initPlayer(streamUrl) {
+            const videoEl = document.getElementById('main-player');
+            const loadingOverlay = document.getElementById('player-loading');
+            const wrapper = document.getElementById('player-wrapper');
+            const urlDisplay = document.getElementById('video-url');
+
+            if (!streamUrl) {
+                loadingOverlay.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-4xl text-yellow-500 mb-4"></i><p class="text-white">Error: No stream URL provided.</p>';
+                urlDisplay.textContent = 'N/A';
+                return;
+            }
+
+            urlDisplay.textContent = streamUrl;
+
+            // Handle Play/Pause visual effects
+            videoEl.addEventListener('play', () => wrapper.classList.add('is-playing'));
+            videoEl.addEventListener('pause', () => wrapper.classList.remove('is-playing'));
+            videoEl.addEventListener('ended', () => wrapper.classList.remove('is-playing'));
+
+            // If the video is buffering/waiting and never actually starts playing within
+            // STALL_TIMEOUT_MS, treat it as "not playing" and auto-switch to another source.
+            videoEl.addEventListener('waiting', armStallTimer);
+            videoEl.addEventListener('playing', clearStallTimer);
+            videoEl.addEventListener('stalled', armStallTimer);
+            videoEl.addEventListener('suspend', armStallTimer);
+
+            armStallTimer(); // also covers the very first load never starting
+
+            if (Hls.isSupported()) {
+                const hls = new Hls({ 
+                    autoStartLoad: true,
+                    maxBufferLength: 30, // seconds
+                    maxMaxBufferLength: 600
+                });
+                hlsInstance = hls;
+                hls.loadSource(streamUrl);
+                hls.attachMedia(videoEl);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    loadingOverlay.style.display = 'none';
+                    clearStallTimer();
+                    videoEl.play().catch(e => {
+                        console.log("Auto-play blocked", e);
+                        // If autoplay blocked, ensure overlay is hidden so they can click play
+                        loadingOverlay.style.display = 'none'; 
+                    });
+                });
+
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.error("fatal network error encountered, try to recover");
+                                networkErrorCount++;
+                                if (networkErrorCount <= 2) {
+                                    hls.startLoad();
+                                } else {
+                                    autoSwitchSource();
+                                }
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.error("fatal media error encountered, try to recover");
+                                mediaErrorCount++;
+                                if (mediaErrorCount <= 2) {
+                                    hls.recoverMediaError();
+                                } else {
+                                    autoSwitchSource();
+                                }
+                                break;
+                            default:
+                                autoSwitchSource();
+                                break;
+                        }
+                    }
+                });
+            } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                // Fallback for native Safari
+                videoEl.src = streamUrl;
+                videoEl.addEventListener('loadedmetadata', function() {
+                    loadingOverlay.style.display = 'none';
+                    clearStallTimer();
+                    videoEl.play().catch(e => console.log("Auto-play blocked", e));
+                });
+                videoEl.addEventListener('error', function() {
+                     autoSwitchSource();
+                });
+            } else {
+                loadingOverlay.innerHTML = '<p class="text-white">Your browser does not support HLS video playback.</p>';
+            }
+        }
+
+        // ---------- Quality Selector ----------
+
+        function extractQualityLabel(url, index) {
+            // Try to find a resolution/quality hint inside the URL itself (e.g. 1080p, 720, hd, sd)
+            const match = url.match(/(\d{3,4}p)/i) || url.match(/[_\-\/](\d{3,4})[_\-\.\/]/);
+            if (match) return match[1].toLowerCase().includes('p') ? match[1] : `${match[1]}p`;
+            if (/\b(hd|high)\b/i.test(url)) return 'HD';
+            if (/\b(sd|low)\b/i.test(url)) return 'SD';
+            return `Source ${index + 1}`;
+        }
+
+        function setupQualityOptions(videos) {
+            const optionsContainer = document.getElementById('quality-options');
+
+            // Match the currently playing video by title (case-insensitive, trimmed)
+            const matched = videos.find(v => v.title && currentTitle &&
+                v.title.trim().toLowerCase() === currentTitle.trim().toLowerCase());
+
+            const links = (matched && Array.isArray(matched.m3u8_links)) ? matched.m3u8_links.filter(Boolean) : [];
+
+            if (!links.length) {
+                optionsContainer.innerHTML = '<div class="px-4 py-2 text-sm text-slate-500">No alternate sources</div>';
+                return;
+            }
+
+            optionsContainer.innerHTML = '';
+            links.forEach((link, index) => {
+                const label = extractQualityLabel(link, index);
+                const isActive = link === currentStreamUrl;
+
+                const btn = document.createElement('button');
+                btn.className = `quality-option w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-white/10 flex items-center justify-between ${isActive ? 'active-quality' : ''}`;
+                btn.innerHTML = `<span>${label}</span>${isActive ? '<i class="fa-solid fa-check text-pink-500"></i>' : ''}`;
+                btn.onclick = () => switchQuality(link, label);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        function toggleQualityMenu(e) {
+            e.stopPropagation();
+            document.getElementById('quality-menu').classList.toggle('hidden-menu');
+        }
+
+        function armStallTimer() {
+            clearTimeout(stallTimer);
+            stallTimer = setTimeout(() => {
+                console.warn('Playback stalled / not starting, auto-switching source');
+                autoSwitchSource();
+            }, STALL_TIMEOUT_MS);
+        }
+
+        function clearStallTimer() {
+            clearTimeout(stallTimer);
+        }
+
+        function switchQuality(newUrl, label) {
+            document.getElementById('quality-menu').classList.add('hidden-menu');
+            if (!newUrl || newUrl === currentStreamUrl) return;
+
+            const idx = currentVideoLinks.indexOf(newUrl);
+            if (idx !== -1) currentLinkIndex = idx;
+
+            // Manual pick means we trust this source again - reset auto-retry counters.
+            sourceSwitchAttempts = 0;
+            networkErrorCount = 0;
+            mediaErrorCount = 0;
+
+            switchToSource(newUrl, `Switching to ${label}...`);
+        }
+
+        function autoSwitchSource() {
+            if (!currentVideoLinks.length || currentVideoLinks.length <= 1) {
+                showFinalPlaybackError();
+                return;
+            }
+
+            sourceSwitchAttempts++;
+            if (sourceSwitchAttempts >= currentVideoLinks.length) {
+                showFinalPlaybackError();
+                return;
+            }
+
+            // Reset per-source retry counters for the new source we're about to try.
+            networkErrorCount = 0;
+            mediaErrorCount = 0;
+
+            currentLinkIndex = (currentLinkIndex + 1) % currentVideoLinks.length;
+            const nextUrl = currentVideoLinks[currentLinkIndex];
+            switchToSource(nextUrl, 'Playback error, trying another source...');
+        }
+
+        function showFinalPlaybackError() {
+            clearStallTimer();
+            const loadingOverlay = document.getElementById('player-loading');
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.innerHTML = '<i class="fa-solid fa-circle-xmark text-4xl text-red-500 mb-4"></i><p class="text-white">Stream failed to load.</p>';
+        }
+
+        function switchToSource(newUrl, statusMessage) {
+            if (!newUrl || newUrl === currentStreamUrl && !statusMessage.startsWith('Playback error')) {
+                return;
+            }
+
+            const videoEl = document.getElementById('main-player');
+            const loadingOverlay = document.getElementById('player-loading');
+            const wasPlaying = !videoEl.paused;
+            const resumeTime = videoEl.currentTime || 0;
+
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-4xl text-purple-500 mb-4"></i><p class="text-white font-medium">${statusMessage}</p>`;
+
+            currentStreamUrl = newUrl;
+            document.getElementById('video-url').textContent = newUrl;
+
+            // Every fresh source load gets its own stall watch - if it doesn't start playing in time, auto-switch again.
+            armStallTimer();
+
+            const resumePlayback = () => {
+                // Auto-fallback starts fresh (don't try to resume mid-way into a broken stream).
+                if (resumeTime > 0) videoEl.currentTime = resumeTime;
+                loadingOverlay.style.display = 'none';
+                clearStallTimer();
+                if (wasPlaying) videoEl.play().catch(() => { armStallTimer(); });
+            };
+
+            if (hlsInstance) {
+                hlsInstance.once(Hls.Events.MANIFEST_PARSED, resumePlayback);
+                hlsInstance.loadSource(newUrl);
+            } else {
+                // Native HLS (Safari) fallback
+                videoEl.src = newUrl;
+                videoEl.addEventListener('loadedmetadata', resumePlayback, { once: true });
+            }
+
+            // Refresh the checkmarks in the menu
+            setupQualityOptions(allVideosData);
+        }
+
+        // ---------- Related Videos ----------
+
+        function renderRelatedVideos(allVideos) {
+            const container = document.getElementById('related-videos-container');
+            const loading = document.getElementById('related-loading');
+            
+            // Shuffle array
+            let shuffled = [...allVideos];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            // Pick 15 random videos to show as related, excluding the current one if possible
+            // (Simple check by URL, though titles might be safer depending on data structure)
+            const related = shuffled.filter(v => {
+                const url = v.m3u8_links && v.m3u8_links.length > 0 ? v.m3u8_links[0] : '';
+                return url !== currentStreamUrl;
+            }).slice(0, 15);
+
+            container.innerHTML = '';
+            
+            related.forEach(video => {
+                const streamUrl = video.m3u8_links && video.m3u8_links.length > 0 ? video.m3u8_links[0] : '';
+                const fallbackImg = "https://placehold.co/160x90/1e293b/ffffff?text=No+Img";
+                
+                const item = document.createElement('div');
+                item.className = 'flex gap-3 group cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors';
+                
+                // Add click event to navigate to this new video (only the title travels - player.html resolves the stream itself)
+                item.onclick = () => {
+                    window.location.href = `/play.html?title=${(video.title)}`;
+                };
+
+                item.innerHTML = `
+                    <div class="relative w-32 md:w-40 shrink-0 aspect-video rounded-lg overflow-hidden bg-slate-800">
+                        <img src="${video.image_url}" 
+                             onerror="this.onerror=null; this.src='${fallbackImg}';" 
+                             alt="Thumbnail" 
+                             class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110">
+                        <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded font-bold">HD</div>
+                        
+                        <div class="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors"></div>
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i class="fa-solid fa-play text-white drop-shadow-lg"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0 py-1">
+                        <h4 class="text-sm font-semibold text-slate-200 line-clamp-2 leading-snug group-hover:text-purple-400 transition-colors" title="${video.title.replace(/"/g, '&quot;')}">
+                            ${video.title}
+                        </h4>
+                        <p class="text-xs text-slate-500 mt-1">VidStream</p>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+
+            loading.classList.add('hidden');
+            container.classList.remove('hidden');
+        }
+
+        // Utility to copy URL
+        function copyUrl() {
+            if(currentStreamUrl) {
+                // Use older execCommand as fallback if clipboard API isn't allowed in context
+                try {
+                    navigator.clipboard.writeText(currentStreamUrl).then(() => {
+                        showCopyFeedback();
+                    }).catch(err => {
+                        fallbackCopyTextToClipboard(currentStreamUrl);
+                    });
+                } catch (e) {
+                     fallbackCopyTextToClipboard(currentStreamUrl);
+                }
+            }
+        }
+
+        function fallbackCopyTextToClipboard(text) {
+            var textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showCopyFeedback();
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function showCopyFeedback() {
+             const btn = document.querySelector('button[title="Copy Stream URL"]');
+             const icon = btn.querySelector('i');
+             icon.className = 'fa-solid fa-check text-green-400';
+             setTimeout(() => {
+                 icon.className = 'fa-regular fa-copy';
+             }, 2000);
+        }
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Age Verification</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #141414; color: white; margin: 0; min-height: 100vh; }
+
+        /* Full-screen overlay used for BOTH the age question and the locked state */
+        .age-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .age-modal {
+            background: #1c1c1c;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 32px 28px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+        }
+
+        .age-modal h2 {
+            margin: 0 0 12px;
+            font-size: 22px;
+        }
+
+        .age-modal p {
+            font-size: 14px;
+            color: #bbb;
+            margin: 0 0 24px;
+            line-height: 1.6;
+        }
+
+        .age-btn-row {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .age-btn {
+            flex: 1;
+            padding: 12px 0;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .age-btn.yes { background: #e50914; color: white; }
+        .age-btn.yes:hover { background: #b80710; }
+
+        .age-btn.no { background: #333; color: white; }
+        .age-btn.no:hover { background: #444; }
+
+        .age-disclaimer {
+            font-size: 11px;
+            color: #777;
+            margin-top: 18px;
+        }
+
+        /* Locked state styling */
+        .locked-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        .locked-title {
+            color: #e50914;
+        }
+
+        /* Rest of the site content — hidden until age is confirmed */
+        .site-content { padding: 40px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<!-- Age verification / locked overlay. This same block, when copied to any page,
+     will re-check the same localStorage flags and lock that page too. -->
+<div class="age-overlay" id="ageOverlay">
+    <!-- Content is filled in by JS depending on state: question vs locked -->
+    <div class="age-modal" id="ageModal"></div>
+</div>
+
+<!-- Example site content, hidden behind the popup until verified -->
+<div class="site-content" id="siteContent" style="display:none;">
+    <h1>Welcome</h1>
+    <p>Age has been verified. You can now view the site.</p>
+</div>
+
+<script>
+    const ageOverlay = document.getElementById('ageOverlay');
+    const ageModal = document.getElementById('ageModal');
+    const siteContent = document.getElementById('siteContent');
+
+    const STORAGE_KEY_VERIFIED = "age_verified_18plus";
+    const STORAGE_KEY_DENIED = "age_denied_under18";
+
+    // Detect known search engine crawlers so Google (and other bots) can still
+    // crawl/index the page normally — the age gate only applies to real visitors.
+    function isSearchEngineBot() {
+        const ua = navigator.userAgent || "";
+        const botPatterns = [
+            /Googlebot/i,
+            /bingbot/i,
+            /Slurp/i,          // Yahoo
+            /DuckDuckBot/i,
+            /Baiduspider/i,
+            /YandexBot/i,
+            /facebookexternalhit/i,
+            /Twitterbot/i,
+            /LinkedInBot/i,
+            /AdsBot-Google/i,
+            /Google-InspectionTool/i
+        ];
+        return botPatterns.some((pattern) => pattern.test(ua));
+    }
+
+    const QUESTION_HTML = `
+        <h2>Age Verification</h2>
+        <p>This website contains 18+ content. Are you 18 years of age or older?</p>
+        <div class="age-btn-row">
+            <button class="age-btn yes" id="ageYesBtn">Yes, I am 18+</button>
+            <button class="age-btn no" id="ageNoBtn">No</button>
+        </div>
+        <div class="age-disclaimer">Clicking "No" will permanently block access to this website on this browser.</div>
+    `;
+
+    const LOCKED_HTML = `
+        <div class="locked-icon">&#128274;</div>
+        <h2 class="locked-title">Access Restricted</h2>
+        <p>This website is disabled for users under 18.<br><br>
+        Please go back or close this tab. This content is not available for you.</p>
+    `;
+
+    function showQuestion() {
+        ageModal.innerHTML = QUESTION_HTML;
+        ageOverlay.style.display = 'flex';
+        siteContent.style.display = 'none';
+
+        document.getElementById('ageYesBtn').addEventListener('click', () => {
+            localStorage.setItem(STORAGE_KEY_VERIFIED, "true");
+            ageOverlay.style.display = 'none';
+            siteContent.style.display = 'block';
+        });
+
+        document.getElementById('ageNoBtn').addEventListener('click', () => {
+            localStorage.setItem(STORAGE_KEY_DENIED, "true");
+            localStorage.removeItem(STORAGE_KEY_VERIFIED);
+            showLocked();
+        });
+    }
+
+    function showLocked() {
+        ageModal.innerHTML = LOCKED_HTML;
+        ageOverlay.style.display = 'flex';
+        siteContent.style.display = 'none';
+    }
+
+    function showSite() {
+        ageOverlay.style.display = 'none';
+        siteContent.style.display = 'block';
+    }
+
+    // On every page load: bots get the site directly (no gate, no lock).
+    // Real visitors go through the normal verified / denied / question flow.
+    if (isSearchEngineBot()) {
+        showSite();
+    } else if (localStorage.getItem(STORAGE_KEY_DENIED) === "true") {
+        // Permanently locked — this will also lock any other page that includes this same script.
+        showLocked();
+    } else if (localStorage.getItem(STORAGE_KEY_VERIFIED) === "true") {
+        showSite();
+    } else {
+        showQuestion();
+    }
+</script>
+
+
+    <script async="async" data-cfasync="false" src="https://pl30890293.effectivecpmnetwork.com/cbf1431ee2e0f79b39b621de28809be8/invoke.js"></script>
+<div id="container-cbf1431ee2e0f79b39b621de28809be8"></div>
+
+
+</body>
+</html>
